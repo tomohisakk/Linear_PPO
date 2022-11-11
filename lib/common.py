@@ -21,7 +21,7 @@ from sub_envs.map import Symbols
 from lib import ppo
 
 GAMES = 10000
-N_EPOCH = 100
+N_EPOCH = 300
 
 def setup_ignite(engine: Engine, params: SimpleNamespace, exp_source, run_name: str, 
 				 net, optimizer, scheduler, extra_metrics: Iterable[str] = ()):
@@ -42,30 +42,33 @@ def setup_ignite(engine: Engine, params: SimpleNamespace, exp_source, run_name: 
 			mean_reward = np.mean(total_rewards[-GAMES:])
 			mean_n_steps = np.mean(total_n_steps_ep[-GAMES:])
 			passed = trainer.state.metrics.get('time_passed', 0)
-			print("Episode/Games %d/%d: reward=%.2f, steps=%d, "
-				"speed=%.1f f/s, elapsed=%s" % (
+			print("%d/%d: reward=%.2f, steps=%d, elapsed=%s" % (
 				trainer.state.episode/GAMES, trainer.state.episode, 
 				mean_reward, mean_n_steps,
-				trainer.state.metrics.get('avg_fps', 0),
 				timedelta(seconds=int(passed))))
 
-		if trainer.state.episode==50000:
+#		if trainer.state.episode==50000:
 #				scheduler.step()
-				print("LR: ", optimizer.param_groups[0]['lr'])
-				save_name = params.env_name + "/" +str(int(trainer.state.episode/GAMES))
-				net.save_checkpoint(save_name)
-				tmp = test(save_name, params.w, params.h, params.dsize, params.s_modules, params.d_modules)
-		elif trainer.state.episode==50000:
+#				print("LR: ", optimizer.param_groups[0]['lr'])
+#				save_name = params.env_name + "/" +str(int(trainer.state.episode/GAMES))
+#				net.save_checkpoint(save_name)
+#				tmp = test(save_name, params.w, params.h, params.dsize, params.s_modules, params.d_modules)
+#		elif trainer.state.episode==50000:
 #			scheduler.step()
-			print("LR: ", optimizer.param_groups[0]['lr'])
+#			print("LR: ", optimizer.param_groups[0]['lr'])
+#			save_name = params.env_name + "/" +str(int(trainer.state.episode/GAMES))
+#			net.save_checkpoint(save_name)
+#			tmp = test(save_name, params.w, params.h, params.dsize, params.s_modules, params.d_modules)
+
+		if trainer.state.episode%GAMES == 0:
 			save_name = params.env_name + "/" +str(int(trainer.state.episode/GAMES))
 			net.save_checkpoint(save_name)
 			tmp = test(save_name, params.w, params.h, params.dsize, params.s_modules, params.d_modules)
 
-#		if trainer.state.episode%GAMES == 0:
-#			save_name = params.env_name + "/" +str(int(trainer.state.episode/GAMES))
-#			net.save_checkpoint(save_name)
-	
+			if trainer.state.episode%(5*GAMES) == 0:
+				scheduler.step()
+				print("LR: ", optimizer.param_groups[0]['lr'])
+
 		if trainer.state.episode == (N_EPOCH*GAMES):
 			save_name = params.env_name + "/" +str(int(trainer.state.episode/GAMES))
 			net.save_checkpoint(save_name)
@@ -134,7 +137,7 @@ def _compute_shortest_route(w, h, dsize, symbols,map, start):
 def test(save_name, w, h, dsize, s_modules, d_modules):
 	###### Set params ##########
 	############################
-	env = MEDAEnv(w, h, dsize, s_modules, d_modules)
+	env = MEDAEnv(w, h, dsize, s_modules, d_modules, test_flag=True)
 
 	device = T.device('cpu')
 	net = ppo.PPO(env.observation_space, env.action_space).to(device)
@@ -175,6 +178,7 @@ def test(save_name, w, h, dsize, s_modules, d_modules):
 
 		while not done:
 			observation = T.tensor([observation], dtype=T.float)
+#			print(observation)
 			with T.no_grad():
 				net.eval()
 				acts, _ = net(observation)
